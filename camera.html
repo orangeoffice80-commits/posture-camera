@@ -40,6 +40,22 @@
   #step-label { text-align:center; font-size:var(--fs-sm); font-weight:600;
                 color:#fff; margin-bottom:clamp(10px,3vw,14px); }
   .btn-row { display:flex; gap:clamp(8px,2.5vw,12px); align-items:center; }
+  /* zoom bar */
+  .zoom-bar { display:flex; align-items:center; gap:10px; margin-bottom:clamp(10px,2.5vw,14px); }
+  .zoom-btn { width:clamp(34px,9vw,40px); height:clamp(34px,9vw,40px);
+              background:rgba(255,255,255,0.14); border:1px solid rgba(255,255,255,0.3);
+              border-radius:50%; color:#fff; font-size:clamp(18px,5vw,22px); font-weight:300;
+              cursor:pointer; display:flex; align-items:center; justify-content:center;
+              flex-shrink:0; touch-action:manipulation; line-height:1; }
+  .zoom-btn:active { background:rgba(255,255,255,0.28); transform:scale(0.92); }
+  #zoom-slider { flex:1; -webkit-appearance:none; appearance:none; height:4px;
+                 background:rgba(255,255,255,0.25); border-radius:2px; outline:none; cursor:pointer; }
+  #zoom-slider::-webkit-slider-thumb { -webkit-appearance:none; width:22px; height:22px;
+    border-radius:50%; background:#fff; box-shadow:0 1px 4px rgba(0,0,0,0.5); cursor:pointer; }
+  #zoom-slider::-moz-range-thumb { width:22px; height:22px; border-radius:50%;
+    background:#fff; border:none; box-shadow:0 1px 4px rgba(0,0,0,0.5); cursor:pointer; }
+  #zoom-label { font-size:clamp(11px,3vw,13px); color:rgba(255,255,255,0.8);
+                min-width:36px; text-align:right; }
   #btn-capture { flex:1; padding:clamp(14px,4vw,18px); background:#1a56db; color:#fff;
                  border:none; border-radius:50px; font-size:clamp(16px,4.5vw,19px);
                  font-weight:700; cursor:pointer; transition:all .15s; touch-action:manipulation; }
@@ -95,6 +111,13 @@
     <div class="step-dot" id="dot-2"></div>
   </div>
   <div id="step-label"></div>
+  <div class="zoom-bar">
+    <button class="zoom-btn" onclick="adjustZoom(-0.5)">−</button>
+    <input type="range" id="zoom-slider" min="1" max="5" step="0.1" value="1"
+           oninput="applyZoom(parseFloat(this.value))">
+    <span id="zoom-label">1.0×</span>
+    <button class="zoom-btn" onclick="adjustZoom(+0.5)">+</button>
+  </div>
   <div class="btn-row">
     <button id="btn-capture" onclick="captureFrame()">📸</button>
     <button id="btn-switch" onclick="switchCamera()">🔄</button>
@@ -165,6 +188,7 @@ var LANG  = (new URLSearchParams(location.search).get("lang") === "ko") ? "ko" :
 var L     = CAM_I18N[LANG];
 var STEPS = L.steps;
 var state = { step:0, stream:null, facingMode:"environment", frames:{} };
+var zoomState = { current:1.0, min:1.0, max:5.0, hwSupported:false };
 
 // ── UI init ───────────────────────────────────────
 function initUI() {
@@ -191,6 +215,8 @@ function startCamera() {
     state.stream.getTracks().forEach(function(t){ t.stop(); });
     state.stream = null; video.srcObject = null;
   }
+  // 카메라 전환 시 video scale 초기화
+  video.style.transform = "translateZ(0) scale(1)";
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
     showError(L.err_api_title, L.err_api_body); return;
   }
@@ -211,17 +237,32 @@ function startCamera() {
     navigator.mediaDevices.getUserMedia(list[i])
       .then(function(stream) {
         state.stream = stream; video.srcObject = stream;
-        // zoom=1 강제 — 지원하는 기기에서 디지털 줌 해제
+        // 줌 초기화 — 하드웨어 줌 가능 여부 감지 후 슬라이더 범위 설정
         try {
           var track = stream.getVideoTracks()[0];
-          if (track && track.getCapabilities && track.applyConstraints) {
+          if (track && track.getCapabilities) {
             var caps = track.getCapabilities();
             if (caps.zoom) {
-              track.applyConstraints({ advanced:[{ zoom: caps.zoom.min }] })
-                   .catch(function(){});
+              zoomState.hwSupported = true;
+              zoomState.min = caps.zoom.min || 1.0;
+              zoomState.max = Math.min(caps.zoom.max || 5.0, 8.0);
+              zoomState.current = zoomState.min;
+              var slider = document.getElementById("zoom-slider");
+              slider.min   = zoomState.min;
+              slider.max   = zoomState.max;
+              slider.step  = 0.1;
+              slider.value = zoomState.min;
+              document.getElementById("zoom-label").textContent = zoomState.min.toFixed(1) + "×";
+              track.applyConstraints({ advanced:[{ zoom: zoomState.min }] }).catch(function(){});
+            } else {
+              // 하드웨어 줌 미지원 → CSS scale() 소프트웨어 줌
+              zoomState.hwSupported = false;
+              initSoftwareZoomSlider();
             }
           }
-        } catch(e) {}
+        } catch(e) {
+          initSoftwareZoomSlider();
+        }
         var p = video.play(); if (p && p.catch) p.catch(function(){});
         setTimeout(function(){
           if (video.videoWidth === 0 && state.stream) {
@@ -297,8 +338,50 @@ function cancelCapture() {
   window.close();
 }
 
+// ── Zoom ─────────────────────────────────────────
+function initSoftwareZoomSlider() {
+  var slider = document.getElementById("zoom-slider");
+  slider.min = 1.0; slider.max = 3.0; slider.step = 0.1; slider.value = 1.0;
+  document.getElementById("zoom-label").textContent = "1.0×";
+}
+
+function applyZoom(val) {
+  val = Math.max(
+    parseFloat(document.getElementById("zoom-slider").min),
+    Math.min(parseFloat(document.getElementById("zoom-slider").max), val)
+  );
+  zoomState.current = val;
+  document.getElementById("zoom-slider").value = val;
+  document.getElementById("zoom-label").textContent = val.toFixed(1) + "×";
+
+  if (zoomState.hwSupported && state.stream) {
+    // 하드웨어 줌 (Android Chrome 등)
+    try {
+      var track = state.stream.getVideoTracks()[0];
+      if (track && track.applyConstraints) {
+        track.applyConstraints({ advanced:[{ zoom: val }] }).catch(function(){});
+      }
+    } catch(e) {}
+  } else {
+    // 소프트웨어 줌 — video에 CSS scale() 적용
+    var video = document.getElementById("video");
+    video.style.transform = "translateZ(0) scale(" + val + ")";
+    video.style.transformOrigin = "center center";
+  }
+}
+
+function adjustZoom(delta) {
+  applyZoom(zoomState.current + delta);
+}
+
+function resetZoom() {
+  var slider = document.getElementById("zoom-slider");
+  applyZoom(parseFloat(slider.min));
+}
+
 function switchCamera() {
   state.facingMode = state.facingMode==="environment" ? "user" : "environment";
+  resetZoom();
   startCamera();
 }
 
