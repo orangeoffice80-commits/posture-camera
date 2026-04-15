@@ -14,9 +14,9 @@
            -webkit-transform:translateZ(0); transform:translateZ(0); }
   #overlay { position:fixed; inset:0; pointer-events:none; }
   .guide-frame { position:absolute; left:50%; top:50%; transform:translate(-50%,-52%);
-                 width:42vw; height:72vh; border:2px dashed rgba(255,255,255,0.6);
+                 width:72vw; height:82vh; border:2px dashed rgba(255,255,255,0.6);
                  border-radius:50% 50% 42% 42%; }
-  .guide-text { position:absolute; bottom:clamp(130px,22vw,160px); left:0; right:0;
+  .guide-text { position:absolute; bottom:clamp(145px,24vw,175px); left:0; right:0;
                 text-align:center; font-size:var(--fs-sm); color:rgba(255,255,255,0.9);
                 text-shadow:0 1px 4px rgba(0,0,0,0.9); padding:0 16px; }
   #topbar { position:fixed; top:0; left:0; right:0;
@@ -194,8 +194,15 @@ function startCamera() {
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
     showError(L.err_api_title, L.err_api_body); return;
   }
+  // 저해상도 + zoom:1 명시 → 광각 렌즈 유지, 디지털 줌 최소화
   var list = [
-    { video:{ facingMode:{ exact:state.facingMode }, width:{ideal:1080}, height:{ideal:1920} }, audio:false },
+    { video:{ facingMode:{ exact:state.facingMode },
+              width:{ideal:640}, height:{ideal:1136},
+              zoom: 1.0 }, audio:false },
+    { video:{ facingMode:{ exact:state.facingMode },
+              width:{ideal:640}, height:{ideal:1136} }, audio:false },
+    { video:{ facingMode:state.facingMode,
+              width:{ideal:640}, height:{ideal:1136} }, audio:false },
     { video:{ facingMode:state.facingMode }, audio:false },
     { video:true, audio:false }
   ];
@@ -204,6 +211,17 @@ function startCamera() {
     navigator.mediaDevices.getUserMedia(list[i])
       .then(function(stream) {
         state.stream = stream; video.srcObject = stream;
+        // zoom=1 강제 — 지원하는 기기에서 디지털 줌 해제
+        try {
+          var track = stream.getVideoTracks()[0];
+          if (track && track.getCapabilities && track.applyConstraints) {
+            var caps = track.getCapabilities();
+            if (caps.zoom) {
+              track.applyConstraints({ advanced:[{ zoom: caps.zoom.min }] })
+                   .catch(function(){});
+            }
+          }
+        } catch(e) {}
         var p = video.play(); if (p && p.catch) p.catch(function(){});
         setTimeout(function(){
           if (video.videoWidth === 0 && state.stream) {
