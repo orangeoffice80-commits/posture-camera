@@ -1,95 +1,91 @@
 <!DOCTYPE html>
-<html lang="ko">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>PostureScan 촬영</title>
+<title>PostureScan Camera</title>
 <style>
-  * { box-sizing:border-box; margin:0; padding:0; }
-  body { background:#000; color:#fff;
-         font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
-         height:100vh; overflow:hidden; }
-  #video { position:fixed; inset:0; width:100%; height:100%;
-           object-fit:cover;
+  :root { --fs:clamp(13px,3.8vw,16px); --fs-sm:clamp(11px,3.2vw,13px); }
+  * { box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent; }
+  body { background:#000; color:#fff; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+         height:100vh; height:100dvh; overflow:hidden; -webkit-font-smoothing:antialiased; }
+  #video { position:fixed; inset:0; width:100%; height:100%; object-fit:cover;
            -webkit-transform:translateZ(0); transform:translateZ(0); }
   #overlay { position:fixed; inset:0; pointer-events:none; }
-  .guide-frame { position:absolute; left:50%; top:50%;
-                 transform:translate(-50%,-52%);
-                 width:42vw; height:72vh;
-                 border:2px dashed rgba(255,255,255,0.6);
+  .guide-frame { position:absolute; left:50%; top:50%; transform:translate(-50%,-52%);
+                 width:42vw; height:72vh; border:2px dashed rgba(255,255,255,0.6);
                  border-radius:50% 50% 42% 42%; }
-  .guide-text { position:absolute; bottom:145px; left:0; right:0;
-                text-align:center; font-size:13px;
-                color:rgba(255,255,255,0.9);
-                text-shadow:0 1px 4px rgba(0,0,0,0.9); }
+  .guide-text { position:absolute; bottom:clamp(130px,22vw,160px); left:0; right:0;
+                text-align:center; font-size:var(--fs-sm); color:rgba(255,255,255,0.9);
+                text-shadow:0 1px 4px rgba(0,0,0,0.9); padding:0 16px; }
   #topbar { position:fixed; top:0; left:0; right:0;
             background:rgba(0,0,0,0.6); backdrop-filter:blur(4px);
-            padding:14px 20px; display:flex;
-            align-items:center; justify-content:space-between; }
-  #topbar-title { font-size:15px; font-weight:600; }
+            padding:clamp(10px,3vw,14px) clamp(14px,4vw,20px);
+            padding-top:max(clamp(10px,3vw,14px), env(safe-area-inset-top));
+            display:flex; align-items:center; justify-content:space-between; }
+  #topbar-title { font-size:var(--fs); font-weight:600; }
   #btn-cancel { background:none; border:none; color:rgba(255,255,255,0.75);
-                font-size:14px; cursor:pointer; padding:4px 10px; }
+                font-size:var(--fs-sm); cursor:pointer; padding:6px 10px;
+                touch-action:manipulation; }
   #controls { position:fixed; bottom:0; left:0; right:0;
               background:rgba(0,0,0,0.78); backdrop-filter:blur(8px);
-              padding:16px 20px 36px; }
-  .step-bar { display:flex; justify-content:center; gap:10px; margin-bottom:14px; }
-  .step-dot { width:10px; height:10px; border-radius:50%;
+              padding:clamp(12px,3.5vw,16px) clamp(14px,4vw,20px);
+              padding-bottom:max(clamp(12px,3.5vw,16px), env(safe-area-inset-bottom)); }
+  .step-bar { display:flex; justify-content:center; gap:clamp(8px,2.5vw,12px); margin-bottom:clamp(10px,3vw,14px); }
+  .step-dot { width:clamp(8px,2.5vw,11px); height:clamp(8px,2.5vw,11px); border-radius:50%;
               background:rgba(255,255,255,0.28); transition:all .3s; }
   .step-dot.active { background:#fff; transform:scale(1.3); }
   .step-dot.done   { background:#0e9f6e; }
-  #step-label { text-align:center; font-size:14px; font-weight:600;
-                color:#fff; margin-bottom:14px; }
-  .btn-row { display:flex; gap:10px; align-items:center; }
-  #btn-capture { flex:1; padding:17px; background:#1a56db; color:#fff;
-                 border:none; border-radius:50px; font-size:18px;
-                 font-weight:700; cursor:pointer; transition:all .15s; }
+  #step-label { text-align:center; font-size:var(--fs-sm); font-weight:600;
+                color:#fff; margin-bottom:clamp(10px,3vw,14px); }
+  .btn-row { display:flex; gap:clamp(8px,2.5vw,12px); align-items:center; }
+  #btn-capture { flex:1; padding:clamp(14px,4vw,18px); background:#1a56db; color:#fff;
+                 border:none; border-radius:50px; font-size:clamp(16px,4.5vw,19px);
+                 font-weight:700; cursor:pointer; transition:all .15s; touch-action:manipulation; }
   #btn-capture:active { transform:scale(0.96); background:#1245b0; }
   #btn-capture:disabled { background:#374151; cursor:not-allowed; }
-  #btn-switch { width:54px; height:54px; background:rgba(255,255,255,0.14);
-                border:1px solid rgba(255,255,255,0.28); border-radius:50%;
-                color:#fff; font-size:22px; cursor:pointer; flex-shrink:0; }
+  #btn-switch { width:clamp(46px,12vw,56px); height:clamp(46px,12vw,56px);
+                background:rgba(255,255,255,0.14); border:1px solid rgba(255,255,255,0.28);
+                border-radius:50%; color:#fff; font-size:clamp(18px,5vw,23px);
+                cursor:pointer; flex-shrink:0; touch-action:manipulation; }
   #flash { position:fixed; inset:0; background:#fff; opacity:0;
            pointer-events:none; transition:opacity .08s; z-index:99; }
-
-  /* 오류 화면 */
+  /* Error screen */
   #error-screen { display:none; position:fixed; inset:0; background:#0f172a;
-                  flex-direction:column; align-items:center;
-                  justify-content:center; padding:32px; text-align:center;
-                  z-index:100; }
+                  flex-direction:column; align-items:center; justify-content:center;
+                  padding:clamp(24px,6vw,36px); text-align:center; z-index:100; }
   #error-screen.show { display:flex; }
-  .err-icon { font-size:52px; margin-bottom:16px; }
-  .err-title { font-size:18px; font-weight:700; margin-bottom:12px; }
-  .err-body  { font-size:13px; color:rgba(255,255,255,0.72);
-               line-height:1.75; white-space:pre-wrap; margin-bottom:24px; }
-  .err-btn   { padding:14px 32px; background:#1a56db; color:#fff;
-               border:none; border-radius:10px; font-size:15px;
-               font-weight:600; cursor:pointer; margin-bottom:10px; width:100%; }
+  .err-icon  { font-size:clamp(44px,12vw,56px); margin-bottom:clamp(12px,3vw,16px); }
+  .err-title { font-size:clamp(16px,4.5vw,19px); font-weight:700; margin-bottom:clamp(10px,3vw,14px); }
+  .err-body  { font-size:var(--fs-sm); color:rgba(255,255,255,0.72); line-height:1.75;
+               white-space:pre-wrap; margin-bottom:clamp(18px,5vw,26px); max-width:360px; }
+  .err-btn   { padding:clamp(12px,3.5vw,15px) clamp(24px,6vw,34px); background:#1a56db; color:#fff;
+               border:none; border-radius:10px; font-size:var(--fs); font-weight:600;
+               cursor:pointer; margin-bottom:10px; width:100%; max-width:320px;
+               touch-action:manipulation; }
   .err-btn-sub { background:rgba(255,255,255,0.1); }
-
-  /* 완료 화면 */
+  /* Done screen */
   #done-screen { display:none; position:fixed; inset:0; background:#065f46;
-                 flex-direction:column; align-items:center;
-                 justify-content:center; z-index:100; }
+                 flex-direction:column; align-items:center; justify-content:center; z-index:100; }
   #done-screen.show { display:flex; }
-  .done-icon { font-size:72px; margin-bottom:16px; }
-  .done-text { font-size:18px; font-weight:600; color:#fff; }
+  .done-icon { font-size:clamp(56px,16vw,76px); margin-bottom:16px; }
+  .done-text { font-size:clamp(16px,4.5vw,20px); font-weight:600; color:#fff; }
 </style>
 </head>
 <body>
 
 <video id="video" autoplay playsinline webkit-playsinline muted
-       x5-playsinline x5-video-player-type="h5"
-       x5-video-player-fullscreen="true"></video>
+       x5-playsinline x5-video-player-type="h5"></video>
 
 <div id="overlay">
   <div class="guide-frame"></div>
-  <div class="guide-text" id="guide-text">신체 전체가 가이드 안에 들어오도록 서세요</div>
+  <div class="guide-text" id="guide-text"></div>
 </div>
 
 <div id="topbar">
-  <div id="topbar-title">📷 정면 촬영</div>
-  <button id="btn-cancel" onclick="cancelCapture()">✕ 취소</button>
+  <div id="topbar-title">📷 <span id="step-view-label"></span></div>
+  <button id="btn-cancel" onclick="cancelCapture()"><span id="cancel-label">Cancel</span></button>
 </div>
 
 <div id="controls">
@@ -98,121 +94,133 @@
     <div class="step-dot" id="dot-1"></div>
     <div class="step-dot" id="dot-2"></div>
   </div>
-  <div id="step-label">1 / 3 — 정면을 바라보고 서세요</div>
+  <div id="step-label"></div>
   <div class="btn-row">
-    <button id="btn-capture" onclick="captureFrame()">📸 촬영</button>
+    <button id="btn-capture" onclick="captureFrame()">📸</button>
     <button id="btn-switch" onclick="switchCamera()">🔄</button>
   </div>
 </div>
 
 <div id="flash"></div>
 
-<!-- 오류 화면 -->
 <div id="error-screen">
   <div class="err-icon">📷</div>
-  <div class="err-title" id="err-title">카메라 권한 필요</div>
+  <div class="err-title" id="err-title"></div>
   <div class="err-body"  id="err-body"></div>
-  <button class="err-btn" onclick="retryCamera()">🔄 다시 시도</button>
-  <button class="err-btn err-btn-sub" onclick="cancelCapture()">취소</button>
+  <button class="err-btn" onclick="retryCamera()" id="btn-retry">Retry</button>
+  <button class="err-btn err-btn-sub" onclick="cancelCapture()" id="btn-err-cancel">Cancel</button>
 </div>
 
-<!-- 완료 화면 -->
 <div id="done-screen">
   <div class="done-icon">✅</div>
-  <div class="done-text">촬영 완료!</div>
+  <div class="done-text" id="done-text">Done!</div>
 </div>
 
 <script>
-var STEPS = [
-  { key:"front", label:"📷 정면 촬영", stepLabel:"1 / 3 — 정면을 바라보고 서세요" },
-  { key:"back",  label:"📷 후면 촬영", stepLabel:"2 / 3 — 뒤를 돌아서 서세요"     },
-  { key:"side",  label:"📷 측면 촬영", stepLabel:"3 / 3 — 오른쪽 옆면이 보이게 서세요" }
-];
+// ── i18n ─────────────────────────────────────────
+var CAM_I18N = {
+  en: {
+    steps: [
+      { key:"front", view:"Front Shot",  stepLabel:"1 / 3 — Face the camera" },
+      { key:"back",  view:"Back Shot",   stepLabel:"2 / 3 — Turn around"     },
+      { key:"side",  view:"Side Shot",   stepLabel:"3 / 3 — Show your right side" }
+    ],
+    cancel:"Cancel", done:"All done!", retry:"Retry",
+    hint:"Stand so your full body fits in the guide frame",
+    not_ready:"Camera not ready. Please wait a moment.",
+    err_api_title:"Camera unavailable",
+    err_api_body:"This browser does not support camera access.\n\nPlease open this page in Safari (iOS) or Chrome (Android).",
+    err_perm_title:"Camera permission denied",
+    err_perm_body:"Please allow camera access and try again:\n\nOn iPhone / iPad:\n① Tap 'AA' or lock icon in the address bar\n② Tap 'Website Settings'\n③ Set Camera → Allow\n\nOr go to:\nSettings → Safari → Camera → Allow\n\nThen tap Retry.",
+    err_busy_title:"Camera in use",
+    err_busy_body:"Another app is using the camera.\nClose any camera or video call app, then tap Retry.",
+    err_none_title:"No camera found",
+    err_none_body:"No camera was detected on this device.",
+    err_generic_title:"Camera error",
+    err_generic_body:"Could not start the camera.\nPlease check your permissions and tap Retry."
+  },
+  ko: {
+    steps: [
+      { key:"front", view:"정면 촬영", stepLabel:"1 / 3 — 정면을 바라보고 서세요" },
+      { key:"back",  view:"후면 촬영", stepLabel:"2 / 3 — 뒤를 돌아서 서세요"     },
+      { key:"side",  view:"측면 촬영", stepLabel:"3 / 3 — 오른쪽 옆면이 보이게 서세요" }
+    ],
+    cancel:"취소", done:"촬영 완료!", retry:"다시 시도",
+    hint:"신체 전체가 가이드 안에 들어오도록 서세요",
+    not_ready:"카메라가 아직 준비되지 않았습니다. 잠시 후 다시 시도하세요.",
+    err_api_title:"카메라를 사용할 수 없습니다",
+    err_api_body:"이 브라우저는 카메라를 지원하지 않습니다.\n\niOS: Safari로 이 페이지를 열어주세요.\nAndroid: Chrome으로 열어주세요.",
+    err_perm_title:"카메라 권한이 거부되었습니다",
+    err_perm_body:"아래 방법으로 카메라 권한을 허용해 주세요.\n\n방법 1 — 주소창에서 허용:\n주소창 'AA' 또는 자물쇠 탭\n→ 웹사이트 설정 → 카메라 → 허용\n\n방법 2 — iOS 설정 앱:\n설정 → Safari → 카메라 → 허용\n\n방법 3 — 개인 정보 보호:\n설정 → 개인 정보 보호 및 보안\n→ 카메라 → Safari 켜기\n\n변경 후 '다시 시도'를 눌러주세요.",
+    err_busy_title:"카메라 사용 중",
+    err_busy_body:"다른 앱이 카메라를 사용 중입니다.\n카메라 앱을 완전히 종료한 후 다시 시도하세요.",
+    err_none_title:"카메라 없음",
+    err_none_body:"기기에서 카메라를 찾을 수 없습니다.",
+    err_generic_title:"카메라 오류",
+    err_generic_body:"카메라를 시작할 수 없습니다.\n권한을 확인하고 다시 시도하세요."
+  }
+};
 
+var LANG  = (new URLSearchParams(location.search).get("lang") === "ko") ? "ko" : "en";
+var L     = CAM_I18N[LANG];
+var STEPS = L.steps;
 var state = { step:0, stream:null, facingMode:"environment", frames:{} };
 
-// ── 카메라 시작 ───────────────────────────────────────────────
+// ── UI init ───────────────────────────────────────
+function initUI() {
+  document.documentElement.lang = LANG;
+  document.getElementById("guide-text").textContent   = L.hint;
+  document.getElementById("cancel-label").textContent = L.cancel;
+  document.getElementById("done-text").textContent    = L.done;
+  document.getElementById("btn-retry").textContent    = L.retry;
+  document.getElementById("btn-err-cancel").textContent = L.cancel;
+  updateStepUI();
+}
+
+function updateStepUI() {
+  var s = STEPS[state.step];
+  document.getElementById("step-view-label").textContent = s.view;
+  document.getElementById("step-label").textContent      = s.stepLabel;
+}
+
+// ── Camera ────────────────────────────────────────
 function startCamera() {
   hideError();
   var video = document.getElementById("video");
-
   if (state.stream) {
     state.stream.getTracks().forEach(function(t){ t.stop(); });
-    state.stream = null;
-    video.srcObject = null;
+    state.stream = null; video.srcObject = null;
   }
-
-  // API 미지원
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    showError(
-      "카메라를 사용할 수 없습니다",
-      "이 브라우저는 카메라를 지원하지 않습니다.\n\n" +
-      "✅ Safari로 이 페이지를 열어주세요.\n" +
-      "Chrome·네이버·카카오 앱 내 브라우저는\n" +
-      "iOS에서 카메라 접근이 불가합니다."
-    );
-    return;
+    showError(L.err_api_title, L.err_api_body); return;
   }
-
-  // 단계별 제약 시도
   var list = [
     { video:{ facingMode:{ exact:state.facingMode }, width:{ideal:1080}, height:{ideal:1920} }, audio:false },
     { video:{ facingMode:state.facingMode }, audio:false },
     { video:true, audio:false }
   ];
-
   (function tryNext(i) {
-    if (i >= list.length) {
-      showError(
-        "카메라를 시작할 수 없습니다",
-        "모든 카메라 설정을 시도했으나 실패했습니다.\n\n" +
-        "아래 순서로 확인해 주세요:\n" +
-        "① Safari로 이 페이지 열기\n" +
-        "② 주소창 왼쪽 'AA' 또는 자물쇠 탭\n" +
-        "③ '웹사이트 설정' → 카메라 → 허용\n" +
-        "④ 페이지 새로고침"
-      );
-      return;
-    }
+    if (i >= list.length) { showError(L.err_generic_title, L.err_generic_body); return; }
     navigator.mediaDevices.getUserMedia(list[i])
       .then(function(stream) {
-        state.stream = stream;
-        video.srcObject = stream;
-        var p = video.play();
-        if (p && p.catch) p.catch(function(){});
-        // 3초 후도 검은 화면이면 다음 제약으로
+        state.stream = stream; video.srcObject = stream;
+        var p = video.play(); if (p && p.catch) p.catch(function(){});
         setTimeout(function(){
           if (video.videoWidth === 0 && state.stream) {
             state.stream.getTracks().forEach(function(t){ t.stop(); });
-            state.stream = null; video.srcObject = null;
-            tryNext(i + 1);
+            state.stream = null; video.srcObject = null; tryNext(i+1);
           }
         }, 3000);
       })
       .catch(function(err) {
-        console.warn("getUserMedia 오류:", err.name, err.message);
-        if (err.name === "NotAllowedError" || err.name === "PermissionDeniedError") {
-          showError(
-            "카메라 권한이 거부되었습니다",
-            "Safari에서 이 페이지를 열고\n아래 방법으로 권한을 허용해 주세요.\n\n" +
-            "방법 1 — 주소창에서 직접 허용:\n" +
-            "주소창 왼쪽 'AA' 탭 →\n'웹사이트 설정' → 카메라 → 허용\n\n" +
-            "방법 2 — iOS 설정 앱:\n" +
-            "설정 → Safari → 카메라 → 허용\n\n" +
-            "방법 3 — 개별 앱 권한:\n" +
-            "설정 → 개인 정보 보호 및 보안\n→ 카메라 → Safari 켜기\n\n" +
-            "변경 후 '다시 시도' 버튼을 눌러주세요."
-          );
-        } else if (err.name === "NotReadableError" || err.name === "TrackStartError") {
-          showError(
-            "카메라 사용 중",
-            "다른 앱이 카메라를 사용 중입니다.\n\n" +
-            "카메라 앱이나 영상통화 앱을\n완전히 종료한 후 다시 시도해 주세요."
-          );
-        } else if (err.name === "NotFoundError") {
-          showError("카메라 없음", "기기에서 카메라를 찾을 수 없습니다.");
+        if (err.name==="NotAllowedError"||err.name==="PermissionDeniedError") {
+          showError(L.err_perm_title, L.err_perm_body);
+        } else if (err.name==="NotReadableError"||err.name==="TrackStartError") {
+          showError(L.err_busy_title, L.err_busy_body);
+        } else if (err.name==="NotFoundError"||err.name==="DevicesNotFoundError") {
+          showError(L.err_none_title, L.err_none_body);
         } else {
-          tryNext(i + 1);
+          tryNext(i+1);
         }
       });
   })(0);
@@ -226,59 +234,40 @@ function showError(title, body) {
   document.getElementById("error-screen").classList.add("show");
 }
 
-// ── 촬영 ─────────────────────────────────────────────────────
+// ── Capture ───────────────────────────────────────
 function captureFrame() {
   var video = document.getElementById("video");
-  if (!state.stream || video.videoWidth === 0) {
-    alert("카메라가 아직 준비되지 않았습니다."); return;
-  }
-
-  // 플래시 효과
+  if (!state.stream || video.videoWidth === 0) { alert(L.not_ready); return; }
   var flash = document.getElementById("flash");
   flash.style.opacity = "0.85";
   setTimeout(function(){ flash.style.opacity = "0"; }, 130);
-
   var canvas = document.createElement("canvas");
   canvas.width = video.videoWidth; canvas.height = video.videoHeight;
   canvas.getContext("2d").drawImage(video, 0, 0);
   state.frames[STEPS[state.step].key] = canvas.toDataURL("image/jpeg", 0.82);
-
-  // 단계 전진
-  document.getElementById("dot-" + state.step).classList.replace("active","done");
+  document.getElementById("dot-"+state.step).classList.replace("active","done");
   state.step++;
-
   if (state.step < STEPS.length) {
-    document.getElementById("dot-" + state.step).classList.add("active");
-    document.getElementById("topbar-title").textContent = STEPS[state.step].label;
-    document.getElementById("step-label").textContent   = STEPS[state.step].stepLabel;
+    document.getElementById("dot-"+state.step).classList.add("active");
+    updateStepUI();
   } else {
     finishCapture();
   }
 }
 
-// ── 완료 → opener에 전달 ──────────────────────────────────────
+// ── Finish ────────────────────────────────────────
 function finishCapture() {
-  if (state.stream) {
-    state.stream.getTracks().forEach(function(t){ t.stop(); });
-    state.stream = null;
-  }
+  if (state.stream) { state.stream.getTracks().forEach(function(t){ t.stop(); }); state.stream = null; }
+  document.getElementById("done-text").textContent = L.done;
   document.getElementById("done-screen").classList.add("show");
-
-  // postMessage로 메인 앱에 전달
-  function sendFrames() {
+  function send() {
     try {
       var target = window.opener || window.parent;
-      if (target) {
-        target.postMessage({ type:"POSTURE_SCAN_FRAMES", frames:state.frames }, "*");
-      }
-    } catch(e) { console.error("postMessage 오류:", e); }
+      if (target) target.postMessage({ type:"POSTURE_SCAN_FRAMES", frames:state.frames }, "*");
+    } catch(e) {}
   }
-
-  sendFrames();
-  setTimeout(function(){
-    sendFrames(); // 한 번 더 (iOS 타이밍 문제 대비)
-    window.close();
-  }, 1500);
+  send();
+  setTimeout(function(){ send(); window.close(); }, 1500);
 }
 
 function cancelCapture() {
@@ -291,11 +280,12 @@ function cancelCapture() {
 }
 
 function switchCamera() {
-  state.facingMode = state.facingMode === "environment" ? "user" : "environment";
+  state.facingMode = state.facingMode==="environment" ? "user" : "environment";
   startCamera();
 }
 
-// 로드 시 즉시 시작
+// ── Init ─────────────────────────────────────────
+initUI();
 startCamera();
 </script>
 </body>
