@@ -5,6 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <title>PostureScan Camera</title>
+<!-- MediaPipe Pose — 브라우저에서 신체 랜드마크 감지 (완전 무료) -->
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404/pose.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3.1675466862/camera_utils.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils@0.3.1675466124/drawing_utils.js" crossorigin="anonymous"></script>
 <style>
   :root { --fs:clamp(13px,3.8vw,16px); --fs-sm:clamp(11px,3.2vw,13px); }
   * { box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent; }
@@ -187,7 +191,12 @@ var CAM_I18N = {
 var LANG  = (new URLSearchParams(location.search).get("lang") === "ko") ? "ko" : "en";
 var L     = CAM_I18N[LANG];
 var STEPS = L.steps;
-var state = { step:0, stream:null, facingMode:"environment", frames:{} };
+var state = {
+  step:0, stream:null, facingMode:"environment",
+  frames:{},      // 촬영된 이미지 base64
+  landmarks:{}    // MediaPipe 감지 랜드마크 좌표
+};
+var mpPose = null;  // MediaPipe Pose 인스턴스
 var zoomState = { current:1.0, min:1.0, max:5.0, hwSupported:false };
 
 // ── UI init ───────────────────────────────────────
@@ -293,25 +302,92 @@ function showError(title, body) {
   document.getElementById("error-screen").classList.add("show");
 }
 
-// ── Capture ───────────────────────────────────────
+// ── Capture + MediaPipe 랜드마크 추출 ────────────
 function captureFrame() {
   var video = document.getElementById("video");
   if (!state.stream || video.videoWidth === 0) { alert(L.not_ready); return; }
+
   var flash = document.getElementById("flash");
   flash.style.opacity = "0.85";
   setTimeout(function(){ flash.style.opacity = "0"; }, 130);
+
   var canvas = document.createElement("canvas");
   canvas.width = video.videoWidth; canvas.height = video.videoHeight;
-  canvas.getContext("2d").drawImage(video, 0, 0);
-  state.frames[STEPS[state.step].key] = canvas.toDataURL("image/jpeg", 0.82);
-  document.getElementById("dot-"+state.step).classList.replace("active","done");
-  state.step++;
-  if (state.step < STEPS.length) {
-    document.getElementById("dot-"+state.step).classList.add("active");
-    updateStepUI();
-  } else {
-    finishCapture();
+  var ctx = canvas.getContext("2d");
+  ctx.drawImage(video, 0, 0);
+
+  var key = STEPS[state.step].key;
+  state.frames[key] = canvas.toDataURL("image/jpeg", 0.82);
+
+  // MediaPipe로 이 프레임의 랜드마크 추출
+  extractLandmarks(canvas, key, function() {
+    document.getElementById("dot-"+state.step).classList.replace("active","done");
+    state.step++;
+    if (state.step < STEPS.length) {
+      document.getElementById("dot-"+state.step).classList.add("active");
+      updateStepUI();
+    } else {
+      finishCapture();
+    }
+  });
+}
+
+// MediaPipe Pose로 랜드마크 감지
+function extractLandmarks(canvas, viewKey, callback) {
+  if (typeof Pose === "undefined") {
+    // MediaPipe 로드 실패 시 빈 랜드마크로 계속 진행
+    console.warn("MediaPipe not loaded, skipping landmark extraction");
+    callback();
+    return;
   }
+
+  if (!mpPose) {
+    mpPose = new Pose({
+      locateFile: function(file) {
+        return "https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404/" + file;
+      }
+    });
+    mpPose.setOptions({
+      modelComplexity: 1,
+      smoothLandmarks: true,
+      enableSegmentation: false,
+      minDetectionConfidence: 0.5,
+      minTrackingConfidence: 0.5
+    });
+  }
+
+  mpPose.onResults(function(results) {
+    if (results.poseLandmarks) {
+      // 33개 랜드마크를 정규화 좌표(0~1)로 저장
+      // 주요 인덱스: 11=왼어깨, 12=오른어깨, 23=왼골반, 24=오른골반
+      // 7=왼귀, 8=오른귀, 0=코
+      var lm = results.poseLandmarks;
+      state.landmarks[viewKey] = {
+        nose:          lm[0]  ? {x:lm[0].x,  y:lm[0].y,  z:lm[0].z,  v:lm[0].visibility}  : null,
+        leftEar:       lm[7]  ? {x:lm[7].x,  y:lm[7].y,  z:lm[7].z,  v:lm[7].visibility}  : null,
+        rightEar:      lm[8]  ? {x:lm[8].x,  y:lm[8].y,  z:lm[8].z,  v:lm[8].visibility}  : null,
+        leftShoulder:  lm[11] ? {x:lm[11].x, y:lm[11].y, z:lm[11].z, v:lm[11].visibility} : null,
+        rightShoulder: lm[12] ? {x:lm[12].x, y:lm[12].y, z:lm[12].z, v:lm[12].visibility} : null,
+        leftElbow:     lm[13] ? {x:lm[13].x, y:lm[13].y, z:lm[13].z, v:lm[13].visibility} : null,
+        rightElbow:    lm[14] ? {x:lm[14].x, y:lm[14].y, z:lm[14].z, v:lm[14].visibility} : null,
+        leftHip:       lm[23] ? {x:lm[23].x, y:lm[23].y, z:lm[23].z, v:lm[23].visibility} : null,
+        rightHip:      lm[24] ? {x:lm[24].x, y:lm[24].y, z:lm[24].z, v:lm[24].visibility} : null,
+        leftKnee:      lm[25] ? {x:lm[25].x, y:lm[25].y, z:lm[25].z, v:lm[25].visibility} : null,
+        rightKnee:     lm[26] ? {x:lm[26].x, y:lm[26].y, z:lm[26].z, v:lm[26].visibility} : null,
+        leftAnkle:     lm[27] ? {x:lm[27].x, y:lm[27].y, z:lm[27].z, v:lm[27].visibility} : null,
+        rightAnkle:    lm[28] ? {x:lm[28].x, y:lm[28].y, z:lm[28].z, v:lm[28].visibility} : null,
+      };
+    } else {
+      state.landmarks[viewKey] = null;
+    }
+    callback();
+  });
+
+  // canvas 이미지를 MediaPipe에 전송
+  mpPose.send({ image: canvas }).catch(function(e) {
+    console.warn("MediaPipe send error:", e);
+    callback();
+  });
 }
 
 // ── Finish ────────────────────────────────────────
@@ -322,7 +398,11 @@ function finishCapture() {
   function send() {
     try {
       var target = window.opener || window.parent;
-      if (target) target.postMessage({ type:"POSTURE_SCAN_FRAMES", frames:state.frames }, "*");
+      if (target) target.postMessage({
+        type:      "POSTURE_SCAN_FRAMES",
+        frames:    state.frames,
+        landmarks: state.landmarks   // MediaPipe 랜드마크 좌표
+      }, "*");
     } catch(e) {}
   }
   send();
